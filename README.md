@@ -50,11 +50,32 @@ git clone https://github.com/WhitneyDesignLabs/EvoBot.git
 scp -r EvoBot/code/ scott@<your-pi-ip>:~/evobot/src/
 ```
 
-## Philosophy
+## Design Philosophy
 
-This project explores what happens when you let an AI continuously improve a robot's software based on real-world sensor feedback. No simulation — real hardware, real physics, real iteration.
+### Local-First
+
+EvoBot defaults to local computation. Cloud services are a bridge, not a destination.
+
+- If it can run on the Pi or LAN — it runs local
+- If local delivers 90-95% of cloud quality — it runs local
+- If cloud is needed — the interface is abstracted so it can transition back to local later
+- Core behavior (motor control, sensors, safety) is always local — no internet dependency
+
+Local LLM inference via Ollama on LAN. Cloud APIs (Claude, TTS, STT) only where local quality isn't sufficient yet. Every cloud component has a documented path back to local.
+
+Full details: [docs/DESIGN_PHILOSOPHY.md](docs/DESIGN_PHILOSOPHY.md)
+
+### Constitutional Governance
+
+EvoBot is governed by the [Project Opengates Constitution](docs/SOUL.md) — a universal ethical framework for AI agents approaching physical embodiment. This isn't bolted on; it's baked in.
+
+Key principles: safety hierarchy (human life > property > task), irreversibility doctrine (pause and verify > proceed and hope), fail-safe defaults (when in doubt, stop), and authorization levels for physical actions.
+
+### The Human-AI Loop
 
 The human provides the hands. The AI provides the logic. The robot provides the feedback loop.
+
+No simulation — real hardware, real physics, real iteration. Self-evolution means the robot proposes improvements to its own code based on real-world performance. Constitutional principles ensure it evolves responsibly.
 
 ## Contributing
 
