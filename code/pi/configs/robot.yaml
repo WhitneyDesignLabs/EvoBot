@@ -1,0 +1,75 @@
+# EvoBot reference-01 Robot Configuration
+# ---
+# All hardware-specific parameters for this build.
+# Pin assignments match WIRING.md for reference-01.
+# Change these values to adapt the software to different hardware.
+
+robot:
+  name: "reference-01"
+  version: "0.1.0"
+
+# Main loop timing
+loop:
+  target_hz: 10                     # Main decision loop rate
+  sensor_poll_hz: 20                # Sensor read rate (can be faster than main loop)
+  heartbeat_interval_ms: 250        # How often to send heartbeat to ESP32 (per WIRING.md)
+
+# Serial connection to ESP32 (UART)
+# Pi GPIO14 TX -> ESP32 GPIO16 RX
+# Pi GPIO15 RX <- ESP32 GPIO17 TX
+# /dev/ttyAMA0 after dtoverlay=disable-bt (see WIRING.md Section 4.3)
+serial:
+  port: "/dev/ttyAMA0"
+  baud: 115200
+  timeout_ms: 100
+  handshake_retries: 5
+
+# Ultrasonic sensors (HC-SR04, connected to Pi GPIO via level shifter on echo)
+# Pin assignments from WIRING.md Section 10:
+#   LEFT:  trigger=GPIO22 (pin 15), echo=GPIO17 (pin 11) via level shifter
+#   RIGHT: trigger=GPIO23 (pin 16), echo=GPIO27 (pin 13) via level shifter
+sensors:
+  ultrasonic:
+    left:
+      trigger_pin: 22
+      echo_pin: 17
+    right:
+      trigger_pin: 23
+      echo_pin: 27
+  imu:
+    bus: 1                          # I2C bus number (I2C1 on Pi 3B)
+    address: 0x68                   # MPU6050 default address (AD0 to GND)
+  camera:
+    device: 0                       # /dev/video0
+    resolution: [320, 240]          # Keep low for Pi 3B performance
+    fps: 10
+
+# Safety thresholds (Constitution Art. 12, 14, 15)
+safety:
+  emergency_stop_distance_cm: 15    # E_STOP if any obstacle closer than this
+  warning_distance_cm: 40           # Slow down, start looking for alternatives
+  max_speed_near_obstacle: 30       # Cap speed (% of max) when within warning distance
+  max_tilt_degrees: 30              # E_STOP if IMU shows excessive tilt (falling over)
+  min_battery_voltage: 6.0          # Halt if battery drops below safe threshold
+  watchdog_timeout_ms: 1000         # ESP32 kills motors if no heartbeat for this long
+  constitution_path: "../../docs/SOUL.md"
+
+# Motor parameters (map to ESP32 expectations)
+motors:
+  max_speed: 100                    # Maximum speed value (maps to ESP32 PWM duty)
+  ramp_rate: 10                     # Max speed change per cycle (acceleration limiting)
+  deadband: 5                       # Below this speed value, motors don't move (stiction)
+
+# Evolution parameters (Constitution Art. 22)
+evolution:
+  evaluation_window: 1000           # Score N cycles before proposing improvements
+  auto_apply_threshold: 0.8         # Confidence threshold for auto-applying config changes
+  revert_if_no_improvement: true    # Auto-revert proposals that don't improve scores
+  revert_window: 500                # Cycles to measure improvement before reverting
+
+# Logging (Constitution Art. 17)
+logging:
+  level: "INFO"
+  log_dir: "logs/"
+  log_cycles: true                  # Log every cycle (verbose, disable for long runs)
+  safety_log: "logs/safety.jsonl"

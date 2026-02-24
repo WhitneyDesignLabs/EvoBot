@@ -1,0 +1,54 @@
+# EvoBot Inference Backend Configuration
+# ---
+# Defines available inference backends and routing rules.
+# The robot uses these settings to decide where to send inference requests.
+#
+# API keys are NEVER stored in this file.
+# Claude API key: set ANTHROPIC_API_KEY environment variable.
+
+# Backend definitions
+backends:
+  ollama_lan:
+    type: "ollama"
+    url: "http://192.168.1.100:11434"   # Replace with your Ollama server IP
+    model: "llama3.2:3b"                 # Model for routine queries
+    model_complex: "llama3.2:8b"         # Model for analytical queries
+    timeout_ms: 5000
+    enabled: true
+
+  claude_api:
+    type: "anthropic"
+    # API key loaded from environment variable ANTHROPIC_API_KEY
+    model: "claude-sonnet-4-20250514"
+    timeout_ms: 15000
+    enabled: true
+
+  cached_heuristics:
+    type: "heuristic"
+    # No external service — hard-coded conservative behaviors
+    # This backend always succeeds (it is the fallback of last resort)
+    enabled: true
+
+# Routing rules: which backend handles which complexity level
+# Priority lists are tried in order; first success wins
+routing:
+  routine:
+    priority: ["ollama_lan", "cached_heuristics"]
+  analytical:
+    priority: ["ollama_lan", "claude_api", "cached_heuristics"]
+  complex:
+    priority: ["claude_api", "ollama_lan", "cached_heuristics"]
+
+# Retry and fallback behavior
+fallback:
+  max_retries_per_backend: 2
+  retry_delay_ms: 500
+  log_fallback_events: true         # Always log when a fallback occurs
+
+# Rate limiting (protect against runaway inference calls)
+rate_limits:
+  ollama_lan:
+    max_calls_per_minute: 30
+  claude_api:
+    max_calls_per_minute: 10        # Cloud calls cost money — be conservative
+    max_calls_per_session: 100      # Hard cap per session
