@@ -1,75 +1,100 @@
 # EvoBot
 
-A recursive self-evolving robot built on Raspberry Pi 3. The AI writes the code. The human builds the body.
+A recursive self-evolving robot platform. The AI architects everything. The human builds the body.
 
 ## What Is This?
 
-EvoBot is an open-source robotics project where Claude (an AI) designs and iterates on the robot's software while a human operator handles wiring, mechanical assembly, and hardware integration. The goal is a small, mobile robot whose software can evaluate its own performance and evolve its own capabilities over time.
+EvoBot is an open-source robotics **platform** — not a single robot design, but a framework for building AI-driven robots that evaluate their own performance and evolve their own software. Claude (AI) is the full architect: mechanics, electronics, software, testing, and safety. The human operator handles physical assembly.
 
-## Hardware
+The platform defines the philosophy, the software architecture, and the constitutional governance. **Builds** define the specific hardware for a particular robot.
 
-- **Brain:** Raspberry Pi 3 Model B Rev 1.2
-- **OS:** Raspbian Bookworm 12
-- **Peripherals:** Motors, sensors, and modules — added incrementally as capabilities evolve
+## Platform vs. Builds
+
+| Layer | What it defines | Where |
+|---|---|---|
+| **Platform** | Software, design philosophy, constitution, evolution framework | `code/`, `docs/`, repo root |
+| **Builds** | Specific hardware, wiring, BOM, config for one robot | `builds/<build-name>/` |
+
+Your robot is a **build**. The platform supports many builds.
+
+See [builds/README.md](builds/README.md) for available configurations and how to create your own.
+
+### Current Builds
+
+| Build | Description | Status |
+|---|---|---|
+| [reference-01](builds/reference-01/) | Mid-size 2WD, Pi 3B + ESP32, TT motors, Ollama + Claude API | In progress |
 
 ## Project Structure
 
 ```
 EvoBot/
-├── README.md            ← you are here
-├── LICENSE              ← MIT License
-├── PROJECT_STATUS.md    ← current state and setup log
-├── docs/                ← setup guides, architecture notes
-├── code/                ← robot software (deployed to Pi)
-├── configs/             ← config files, systemd units
-├── logs/                ← session logs, debug output
-└── hardware/            ← wiring diagrams, parts inventory
-```
-
-On the Pi itself:
-```
-/home/scott/evobot/
-├── README.md            ← on-device documentation
-├── src/                 ← running robot source code
-├── configs/             ← local configuration
-└── logs/                ← runtime logs
+├── README.md                ← you are here (platform overview)
+├── LICENSE                  ← MIT License
+├── CONTRIBUTING.md          ← how to contribute
+├── docs/
+│   ├── DESIGN_PHILOSOPHY.md ← local-first, constitutional governance
+│   ├── ARCHITECTURE_VISION.md ← compute model, evolution roadmap
+│   └── SOUL.md              ← Opengates Constitution (governs all builds)
+├── code/                    ← platform software (configurable per build)
+├── builds/
+│   ├── README.md            ← how builds work, how to add yours
+│   └── reference-01/        ← first reference build
+│       ├── hardware/        ← BOM, budget, shopping list
+│       ├── configs/         ← build-specific configuration
+│       └── docs/            ← topology, wiring, chassis design
+├── hardware/                ← shared reference (inventory template)
+└── configs/                 ← shared/default configuration
 ```
 
 ## Getting Started
 
-### Prerequisites
-- Raspberry Pi 3 Model B (or compatible)
-- Raspbian Bookworm 12
-- Python 3.11+
-- NetworkManager (default on Bookworm)
+### 1. Choose or Create a Build
 
-### Clone and Deploy
+Start with [reference-01](builds/reference-01/) or create your own based on what parts you have.
+
+### 2. Prerequisites (minimum)
+
+- Any Raspberry Pi with WiFi (Pi 3B+, Pi 4, Pi 5, Pi Zero 2W)
+- Python 3.11+
+- At least one motor + driver
+- Some way to sense the world (ultrasonic, camera, anything)
+- **Inference backend** — pick one:
+
+| Option | Requirements | Cost | Offline? |
+|---|---|---|---|
+| **Ollama on LAN** | Any PC/server with Ollama installed | Free | Yes |
+| **Ollama on Pi** | Pi 4+ recommended (Pi 3 is very slow) | Free | Yes |
+| **Claude API** | Anthropic API key, internet access | Per-token | No |
+| **Other cloud LLM** | API key for your provider | Per-token | No |
+| **Hybrid (recommended)** | Ollama local + cloud fallback | Minimal | Degrades gracefully |
+
+### 3. Clone and Deploy
+
 ```bash
 git clone https://github.com/WhitneyDesignLabs/EvoBot.git
 # Copy code to your Pi:
-scp -r EvoBot/code/ scott@<your-pi-ip>:~/evobot/src/
+scp -r EvoBot/code/ user@<your-pi-ip>:~/evobot/src/
 ```
 
 ## Design Philosophy
 
 ### Local-First
 
-EvoBot defaults to local computation. Cloud services are a bridge, not a destination.
+Default to local computation. Cloud services are a bridge, not a destination.
 
 - If it can run on the Pi or LAN — it runs local
 - If local delivers 90-95% of cloud quality — it runs local
-- If cloud is needed — the interface is abstracted so it can transition back to local later
-- Core behavior (motor control, sensors, safety) is always local — no internet dependency
-
-Local LLM inference via Ollama on LAN. Cloud APIs (Claude, TTS, STT) only where local quality isn't sufficient yet. Every cloud component has a documented path back to local.
+- If cloud is needed — the interface is abstracted so it can swap back to local later
+- Core behavior (motor control, sensors, safety) is **always** local
 
 Full details: [docs/DESIGN_PHILOSOPHY.md](docs/DESIGN_PHILOSOPHY.md)
 
 ### Constitutional Governance
 
-EvoBot is governed by the [Project Opengates Constitution](docs/SOUL.md) — a universal ethical framework for AI agents approaching physical embodiment. This isn't bolted on; it's baked in.
+All EvoBot builds are governed by the [Project Opengates Constitution](docs/SOUL.md) — a universal ethical framework for AI agents approaching physical embodiment.
 
-Key principles: safety hierarchy (human life > property > task), irreversibility doctrine (pause and verify > proceed and hope), fail-safe defaults (when in doubt, stop), and authorization levels for physical actions.
+Key principles: safety hierarchy (human life > property > task), irreversibility doctrine, fail-safe defaults, and authorization levels for physical actions. This isn't optional — it's the foundation.
 
 ### The Human-AI Loop
 
@@ -79,7 +104,7 @@ No simulation — real hardware, real physics, real iteration. Self-evolution me
 
 ## Contributing
 
-Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions welcome — especially new builds. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
