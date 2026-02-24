@@ -14,6 +14,7 @@
 | M2 | Stepper | Various sizes (NEMA 17, 23, etc.) | Multiple | 12-48V | Range from 3D printer size to CNC size |
 | M3 | Hobby Servo | Standard and micro sizes | Multiple | 5-6V | Both continuous rotation and standard position |
 | M4 | DC Brushed | Various | Multiple | Various | Less preferred — want better control options |
+| **M5** | **TT Geared DC w/ Encoder** | **Yellow gearbox motor** | **4** | **3-6V** | **v1 DRIVE MOTORS — confirmed in stock, cheap and ubiquitous** |
 
 ---
 
@@ -24,7 +25,9 @@
 | D1 | High-current H-Bridge | **BTS7960** (43A) | 1+ | For large DC motors — dual H-bridge, PWM capable |
 | D2 | BLDC Controller | Riorand | 1+ | For hoverboard-style hall effect BLDC motors |
 | D3 | CNC Stepper Drivers | Large (DM542/similar) | Multiple | For CNC-class steppers |
-| D4 | 3D Printer Stepper Drivers | Small (A4988/TMC2209/similar) | Multiple | For NEMA 17 class steppers |
+| D4 | 3D Printer Stepper Drivers | A4988, DRV8825 | Multiple | For NEMA 17 class steppers |
+| **D5** | **Arduino Motor Shield** | **L293D-based (Motor A&B)** | **1+** | **v1 DRIVE — drives TT motors directly, 5-12V** |
+| D6 | Arduino Motor Shields | Older era shields | Multiple | Various, to be tested |
 
 ---
 
@@ -73,7 +76,9 @@
 | P4 | Hoverboard batteries | 36V packs | 2+ | From hoverboard teardowns |
 | P5 | Custom pack capability | Spot welder / holder | — | Can build 12V, 24V, 36V packs to spec |
 
-*Preferred starting voltage: 12V or 24V (smaller, safer for initial dev). 36V hoverboard packs available for later.*
+| **P6** | **2S LiPo/Li-Ion packs** | **Ready to go** | **Multiple** | **~7.4V — good for servo power, could run TT motors directly** |
+
+*v1 power: 2S pack (7.4V) for motors + buck to 5V for Pi. Can build 3S (12V) when needed.*
 
 ---
 
@@ -117,7 +122,7 @@
 
 | # | Type | Description | Qty | Notes |
 |---|------|------------|-----|-------|
-| X1 | Wheels | TBD — can make or buy | 0 | Decision needed |
+| **X1** | **TT Motor Wheels** | **Yellow motor compatible** | **3** | **v1 — 1 short for 4WD, fine for 2WD+caster or 3-wheel config** |
 | X2 | Wiring | Assorted gauge | Bulk | Hook-up wire, various gauges |
 | X3 | Terminal Blocks | Various | Multiple | Power distribution, connections |
 | X4 | Misc Connectors | Various | Multiple | JST, Dupont, barrel, etc. |

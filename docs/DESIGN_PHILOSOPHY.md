@@ -141,4 +141,43 @@ Autonomous evolution is permitted for:
 
 ---
 
+## Procurement Philosophy: Build From the Pile
+
+### Zero-Dollar First
+
+**Round 1 costs $0.** The first working robot is built entirely from parts on hand. No purchases until the platform drives, senses, and thinks using what's already in the shop.
+
+This isn't just frugality — it's a design constraint that forces creativity and proves the concept before money enters the picture. If the brain doesn't work with cheap motors, buying expensive motors won't fix it.
+
+### The Reward Program
+
+Spending power is earned through demonstrated success. This is a human-controlled parameter.
+
+| Milestone | Unlocked Budget | Cumulative |
+|---|---|---|
+| **v1 drives and avoids obstacles** | $0 (built from pile) | $0 |
+| **v1 self-evaluates and proposes code improvement** | $50 unlocked | $50 |
+| **v1 successfully self-evolves a behavior** | +$100 | $150 |
+| **v2 platform upgrade justified by v1 learnings** | +$150 | $300 |
+| **Perception system working (camera + SLAM)** | +$200 | $500 |
+| **Voice interaction working (TTS + STT)** | +$200 | $700 |
+| **Arm integration (SO-101 or equivalent)** | +$300 | $1,000 |
+
+**Hard ceiling: $1,000** (human-controlled, adjustable by Scott only)
+
+### Rules
+
+1. **Claude (architect) recommends purchases.** Scott approves.
+2. **Every purchase must reference a specific milestone or capability it unblocks.**
+3. **No speculative buying.** Don't buy parts for Phase 5 during Phase 1.
+4. **Build/fabricate before buying.** If it can be laser-cut, 3D printed, or assembled from stock — do that first.
+5. **Budget is tracked in `hardware/BUDGET.md`** with running totals.
+6. **The $1,000 ceiling is a parameter, not a promise.** It can go up or down. Only Scott changes it.
+
+### Why This Matters
+
+Money is not the constraint — thinking is. A robot that costs $2,000 in parts but has mediocre software is worth less than a robot that costs $50 in parts with brilliant software. The AI architect's job is to maximize capability per dollar, not maximize spending.
+
+---
+
 *This document is a living guide. It evolves as the project evolves — but the core principles don't change.*

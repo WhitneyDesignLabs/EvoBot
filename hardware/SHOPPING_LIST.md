@@ -1,51 +1,59 @@
 # EvoBot Shopping List
 
-## Priority: Blocks v1 Build
+## v1 Build: $0 Target
 
-These items are needed before the first drive test and are not currently in inventory.
+**v1 requires NO purchases.** All parts sourced from shop stock + fabrication.
 
-| Item | Why | Est. Price | Link/Notes |
+| v1 Need | Solved By | Cost |
+|---|---|---|
+| Drive motors | 4x TT yellow geared DC w/ encoder (in stock) | $0 |
+| Wheels | 3x TT wheels (in stock), caster 3D printed | $0 |
+| Motor driver | Arduino motor shield L293D (in stock) | $0 |
+| Brain | Pi 3B #1 (allocated) | $0 |
+| Co-processor | ESP32 dev board (in stock) | $0 |
+| Sensors | HC-SR04, MPU6050, webcam (all in stock) | $0 |
+| Battery | 2S Li-Ion pack (in stock, ready to go) | $0 |
+| Buck converter | 5V output (in stock) | $0 |
+| Chassis | Laser-cut scrap wood + 3D printed mounts | $0 |
+| Level shifters | In stock | $0 |
+| Wiring/connectors | In stock | $0 |
+| **TOTAL** | **Everything from the pile** | **$0** |
+
+---
+
+## Post-v1: When Budget Unlocks ($50 after R1 milestone)
+
+These purchases would improve v1 or prepare for v2. Not needed until v1 proves itself.
+
+| Item | Why | Est. Price | Priority |
 |---|---|---|---|
-| **2x Geared DC Motor w/ Encoder** (12V, 6mm shaft) | Drive motors for v1. Encoder feedback essential for controlled movement. JGB37-520 or similar, ~100-300 RPM. | $15-25/pair | Amazon: "JGB37-520 encoder motor" or "12V geared DC motor encoder" |
-| **1x Caster wheel** (ball or swivel, ~25-30mm) | Third contact point for differential drive stability | $3-5 | Amazon: "ball caster robot" |
-| **1x Motor driver (L298N or TB6612FNG)** | Drive the two geared motors from Pi/ESP32. L298N if on hand works, TB6612 is more efficient. | $5-8 | May already have — check shop |
-| **1x PCA9685 servo driver board** | 16-channel PWM over I2C. For future servo/arm control, keeps GPIO clean. | $5-8 | Amazon: "PCA9685 servo driver I2C" |
-| **1x 12V battery pack** (3S LiPo or 3S LiFePO4) | Mobile power. XT60 connector preferred. ~2200-5000mAh for initial testing. | $15-30 | Could build from cells in stock instead |
-| **Standoffs, M3 screws, nuts assortment** | Mounting boards to chassis | $8-12 | Amazon: "M3 standoff assortment kit" |
-
-**Estimated total for v1 essentials: ~$50-90** (less if motors/battery built from stock)
+| PCA9685 servo driver board | 16-channel PWM over I2C, clean servo/motor control | $5-8 | High — enables multi-servo future |
+| Pi Camera Module v2 or v3 | CSI interface, better latency/quality than USB webcam | $25-30 | Medium — USB webcam works for now |
+| M3 standoff assortment kit | Proper mounting hardware (currently improvising) | $8-12 | Medium — QoL |
+| XT60 connector set | Standard battery connectors for safe hot-swap | $5-8 | Low — can solder direct for now |
 
 ---
 
-## Priority: Nice to Have for v1
+## Future Phases (Locked Until Milestones)
 
-| Item | Why | Est. Price | Notes |
-|---|---|---|---|
-| Pi Camera Module v2 (or v3) | CSI interface, better than USB webcam for Pi integration | $25-30 | USB webcam works as fallback |
-| Ribbon cable for Pi Camera | If buying Pi Camera | $3-5 | |
-| XT60 connectors (male+female set) | Standard power connectors for battery swapping | $5-8 | |
-| Wire management (cable ties, spiral wrap) | Keep the build clean and maintainable | $5-8 | |
-
----
-
-## Future Phases
-
-| Item | Phase | Est. Price | Notes |
-|---|---|---|---|
-| SO-101 arm kit (or parts to build) | Phase 5 | $100-300 | 6-DOF open source arm — Hugging Face LeRobot project |
-| Dynamixel or serial bus servos | Phase 5 | $80-200 | For arm joints if not using SO-101 kit servos |
-| LiDAR module (RPLIDAR A1 or similar) | Phase 2 | $80-100 | Better mapping than ultrasonic |
-| Charging dock components | Phase 6 | $20-40 | Spring contacts, alignment guides |
+| Item | Phase | Unlocked At | Est. Price | Notes |
+|---|---|---|---|---|
+| Upgraded motors (JGB37-520 w/ encoder, 12V) | v2 | R4 ($300 cumulative) | $15-25/pair | Real torque for heavier platform |
+| 3S LiFePO4 pack (12V) | v2 | R4 | $20-40 | Build from cells or buy |
+| LiDAR (RPLIDAR A1 or similar) | Phase 2 | R5 ($500 cumulative) | $80-100 | SLAM-quality mapping |
+| SO-101 arm kit or servo set | Phase 5 | R7 ($1000 cumulative) | $100-300 | 6-DOF manipulation |
+| Charging dock components | Phase 6 | R7 | $20-40 | Autonomous recharging |
 
 ---
 
-## Procurement Notes
+## Procurement Rules
 
-- **Build vs. buy:** Prefer building from stock (batteries, motor mounts, chassis) where possible
-- **Budget authority:** Claude (architect) can recommend purchases; Scott approves
-- **Vendor preference:** Amazon for speed; AliExpress for bulk/cost when time permits
-- **Fabrication first:** If it can be 3D printed, laser cut, or built from stock — do that before buying
+1. **$0 until v1 milestone (R1) is achieved**
+2. Claude recommends, Scott approves — see `BUDGET.md` for tracking
+3. Fabricate before buying (3D print, laser cut, build from stock)
+4. Amazon for speed, AliExpress for bulk when time permits
+5. Every purchase logged in `BUDGET.md` with milestone reference
 
 ---
 
-*Updated as needs are identified. Items move off this list when acquired.*
+*Nothing on this list gets bought until the pile proves itself.*
