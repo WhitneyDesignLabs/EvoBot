@@ -37,36 +37,16 @@ MOTOR_TAB_THICKNESS = 3    # mm
 MOTOR_MOUNT_HOLE_SPAN = 17 # mm center-to-center
 MOTOR_MOUNT_HOLE_DIA = M3_CLEARANCE
 
-# ─── Ball caster parameters ──────────────────────────────────────────────────
-CASTER_BALL_DIA = 16       # mm
-CASTER_CUP_ID = 16.5       # mm inner diameter of cup
-CASTER_CUP_DEPTH = 10      # mm
-CASTER_FLANGE_DIA = 30     # mm
-CASTER_FLANGE_THICK = 3    # mm
-CASTER_MOUNT_HOLE_SPACING = 20  # mm triangle spacing
-CASTER_MOUNT_HOLE_DIA = M3_CLEARANCE
-CASTER_STEM_HEIGHT = 15    # mm (stem between flange and cup)
-# Total height: flange (3) + stem (15) + cup (~10) = ~28mm
-# Ball protrudes ~6mm below cup bottom -> ground contact at ~28 - 10 + 6 ≈ 24mm below flange
-# With wheel radius 32.5mm, plate thickness 3mm -> need ~29.5mm from plate bottom to ground
-# Flange sits on top of plate, so distance = flange_thick + stem + cup_depth - ball_protrusion
-# = 3 + 15 + 10 - 6 = 22mm below plate bottom... adjust stem to hit target
-# Target: 29.5mm from plate bottom to ground
-# ball_protrusion = CASTER_BALL_DIA/2 - (CASTER_CUP_DEPTH - CASTER_BALL_DIA/2) roughly
-# For a 16mm ball in a 10mm deep cup: ball center at 10 - 8 = 2mm above cup bottom
-# ball protrudes: 8 - 2 = 6mm below cup bottom edge
-# distance from plate bottom to ground = STEM_HEIGHT + CUP outer depth + ball_protrusion
-# Let's just compute:
-# Cup outer height ~ CUP_DEPTH + wall(1.5mm) at bottom = ~11.5
-# Total below flange bottom: STEM_HEIGHT + 11.5
-# Ball protrudes: BALL_DIA/2 - (CUP_DEPTH - BALL_DIA/2) = 8 - (10-8) = 6mm below cup inner bottom
-# So ground distance from plate bottom = STEM_HEIGHT + CUP_DEPTH + 1.5(cup wall) - (CUP_DEPTH - 6)
-# Simplify: STEM_HEIGHT + 1.5 + 6 = STEM_HEIGHT + 7.5
-# Need this = 29.5 -> STEM_HEIGHT = 22
-# Recalculate:
-CASTER_STEM_HEIGHT = 22    # adjusted for correct ride height
-CASTER_CUP_WALL = 1.5      # mm
-CASTER_SNAP_SLOT_WIDTH = 5  # mm snap-in slot in cup rim
+# ─── Caster skid / drag tip parameters ───────────────────────────────────────
+SKID_DOME_RADIUS = 8        # mm hemisphere radius (ground contact surface)
+SKID_STEM_DIA = 16          # mm stem diameter (= dome diameter)
+SKID_FLANGE_DIA = 35        # mm mounting flange outer diameter
+SKID_FLANGE_THICK = 3       # mm
+# Ride height: 29.5mm from deck bottom to ground
+# = flange_thick + stem_height + dome_radius = 3 + 18.5 + 8 = 29.5mm
+SKID_STEM_HEIGHT = 18.5     # mm
+SKID_MOUNT_BOLT_RADIUS = 12 # mm bolt circle radius (matches DXF)
+SKID_MOUNT_HOLE_DIA = 3.4   # mm M3 clearance (generous for print tolerance)
 
 # ─── Standoff parameters ─────────────────────────────────────────────────────
 STANDOFF_OD = 8            # mm outer diameter
@@ -75,15 +55,17 @@ STANDOFF_HEIGHT = 35       # mm
 STANDOFF_FLANGE_DIA = 10   # mm
 STANDOFF_FLANGE_THICK = 1.5  # mm
 
-# ─── Sensor bracket parameters ───────────────────────────────────────────────
-SENSOR_BRACKET_W = 45       # mm (HC-SR04 board width)
-SENSOR_BRACKET_H = 20       # mm (HC-SR04 board height)
-SENSOR_BASE_DEPTH = 15      # mm horizontal base depth
-SENSOR_WALL_THICK = 2.5     # mm
-SENSOR_ANGLE_DEG = 15       # degrees outward from vertical
-SENSOR_TRANSDUCER_DIA = 16  # mm
-SENSOR_TRANSDUCER_SPAN = 26 # mm center-to-center
-SENSOR_BASE_HOLE_SPAN = 35  # mm mounting hole spacing on base
+# ─── Sensor bracket parameters (L-bracket with channel rails) ────────────────
+BRACKET_LENGTH = 50         # mm (X dimension, bracket width)
+BRACKET_BASE_W = 18         # mm (Y dimension, base depth)
+BRACKET_BASE_T = 3          # mm (Z, base thickness)
+BRACKET_WALL_T = 2.5        # mm (Y, back wall thickness)
+BRACKET_WALL_H = 30         # mm (Z, back wall height from base top)
+BRACKET_RAIL_DEPTH = 3      # mm (Y, rail protrusion from wall)
+BRACKET_RAIL_H = 2          # mm (Z, rail height/thickness)
+BRACKET_BOT_RAIL_Z = 8      # mm (Z offset from base bottom for bottom rail)
+BRACKET_BOARD_GAP = 20.5    # mm (gap between rails = HC-SR04 board height)
+BRACKET_HOLE_SPAN = 35      # mm (M3 bolt hole spacing on base)
 
 # ─── Webcam mount parameters ─────────────────────────────────────────────────
 WEBCAM_POST_DIA = 12        # mm
@@ -166,6 +148,290 @@ def tube_mesh(outer_r, inner_r, height, segments=SEGMENTS, center_xy=(0, 0), z_b
         # Inner wall (normal inward, reversed winding)
         triangles.append([[ix1, iy1, z0], [ix2, iy2, z0], [ix2, iy2, z1]])
         triangles.append([[ix1, iy1, z0], [ix2, iy2, z1], [ix1, iy1, z1]])
+
+    return np.array(triangles, dtype=np.float64)
+
+
+def frustum_tube_mesh(outer_r_bot, outer_r_top, inner_r_bot, inner_r_top,
+                      height, segments=SEGMENTS, center_xy=(0, 0), z_base=0):
+    """Create a frustum (truncated cone) tube — outer and inner radii can
+    differ between bottom and top. Returns array of shape (n_triangles, 3, 3)."""
+    cx, cy = center_xy
+    triangles = []
+    angles = [2 * math.pi * i / segments for i in range(segments)]
+    z0 = z_base
+    z1 = z_base + height
+
+    for i in range(segments):
+        a1 = angles[i]
+        a2 = angles[(i + 1) % segments]
+        ca1, sa1 = math.cos(a1), math.sin(a1)
+        ca2, sa2 = math.cos(a2), math.sin(a2)
+
+        # Bottom points
+        ob1 = [cx + outer_r_bot * ca1, cy + outer_r_bot * sa1, z0]
+        ob2 = [cx + outer_r_bot * ca2, cy + outer_r_bot * sa2, z0]
+        ib1 = [cx + inner_r_bot * ca1, cy + inner_r_bot * sa1, z0]
+        ib2 = [cx + inner_r_bot * ca2, cy + inner_r_bot * sa2, z0]
+        # Top points
+        ot1 = [cx + outer_r_top * ca1, cy + outer_r_top * sa1, z1]
+        ot2 = [cx + outer_r_top * ca2, cy + outer_r_top * sa2, z1]
+        it1 = [cx + inner_r_top * ca1, cy + inner_r_top * sa1, z1]
+        it2 = [cx + inner_r_top * ca2, cy + inner_r_top * sa2, z1]
+
+        # Bottom annular face (normal -Z)
+        triangles.append([ob1, ob2, ib2])
+        triangles.append([ob1, ib2, ib1])
+        # Top annular face (normal +Z)
+        triangles.append([ot1, it1, it2])
+        triangles.append([ot1, it2, ot2])
+        # Outer wall
+        triangles.append([ob1, ot1, ot2])
+        triangles.append([ob1, ot2, ob2])
+        # Inner wall
+        triangles.append([ib1, ib2, it2])
+        triangles.append([ib1, it2, it1])
+
+    return np.array(triangles, dtype=np.float64)
+
+
+def disk_with_holes_mesh(outer_r, height, holes, segments=96, rings=6,
+                         center_xy=(0, 0), z_base=0):
+    """Create a solid disk (cylinder) with cylindrical through-holes.
+
+    Uses a fine radial grid and centroid-based hole exclusion to produce
+    proper geometry with real through-holes — no CSG subtraction needed.
+
+    Args:
+        outer_r: outer radius of the disk
+        height: thickness of the disk
+        holes: list of (hx, hy, hr) — hole center x/y relative to disk center, hole radius
+        segments: angular divisions (higher = rounder holes, 96 is good)
+        rings: radial divisions (higher = better hole edge resolution)
+        center_xy: (cx, cy) center of disk
+        z_base: z position of disk bottom
+    Returns:
+        triangle array (n, 3, 3)
+    """
+    cx, cy = center_xy
+    z0, z1 = z_base, z_base + height
+    triangles = []
+
+    ring_radii = [outer_r * i / rings for i in range(rings + 1)]
+    angles = [2 * math.pi * i / segments for i in range(segments)]
+
+    def point_in_hole(px, py):
+        for hx, hy, hr in holes:
+            dx, dy = px - (cx + hx), py - (cy + hy)
+            if dx * dx + dy * dy < hr * hr:
+                return True
+        return False
+
+    # Top and bottom faces: radial grid cells, skip those inside holes
+    for ri in range(rings):
+        r_in = ring_radii[ri]
+        r_out = ring_radii[ri + 1]
+
+        for ai in range(segments):
+            a1 = angles[ai]
+            a2 = angles[(ai + 1) % segments]
+            ca1, sa1 = math.cos(a1), math.sin(a1)
+            ca2, sa2 = math.cos(a2), math.sin(a2)
+
+            if ri == 0:
+                # Center triangle (fan from origin)
+                p0x, p0y = cx, cy
+                p1x, p1y = cx + r_out * ca1, cy + r_out * sa1
+                p2x, p2y = cx + r_out * ca2, cy + r_out * sa2
+                cent_x = (p0x + p1x + p2x) / 3
+                cent_y = (p0y + p1y + p2y) / 3
+                if not point_in_hole(cent_x, cent_y):
+                    # Bottom face (-Z normal)
+                    triangles.append([[p0x, p0y, z0], [p2x, p2y, z0], [p1x, p1y, z0]])
+                    # Top face (+Z normal)
+                    triangles.append([[p0x, p0y, z1], [p1x, p1y, z1], [p2x, p2y, z1]])
+            else:
+                # Quad cell between two rings
+                p1x, p1y = cx + r_in * ca1, cy + r_in * sa1
+                p2x, p2y = cx + r_in * ca2, cy + r_in * sa2
+                p3x, p3y = cx + r_out * ca2, cy + r_out * sa2
+                p4x, p4y = cx + r_out * ca1, cy + r_out * sa1
+                cent_x = (p1x + p2x + p3x + p4x) / 4
+                cent_y = (p1y + p2y + p3y + p4y) / 4
+                if not point_in_hole(cent_x, cent_y):
+                    # Bottom face (-Z normal, two triangles)
+                    triangles.append([[p1x, p1y, z0], [p3x, p3y, z0], [p4x, p4y, z0]])
+                    triangles.append([[p1x, p1y, z0], [p2x, p2y, z0], [p3x, p3y, z0]])
+                    # Top face (+Z normal, two triangles)
+                    triangles.append([[p1x, p1y, z1], [p4x, p4y, z1], [p3x, p3y, z1]])
+                    triangles.append([[p1x, p1y, z1], [p3x, p3y, z1], [p2x, p2y, z1]])
+
+    # Outer cylinder wall
+    for ai in range(segments):
+        a1 = angles[ai]
+        a2 = angles[(ai + 1) % segments]
+        x1 = cx + outer_r * math.cos(a1)
+        y1 = cy + outer_r * math.sin(a1)
+        x2 = cx + outer_r * math.cos(a2)
+        y2 = cy + outer_r * math.sin(a2)
+        triangles.append([[x1, y1, z0], [x2, y2, z0], [x2, y2, z1]])
+        triangles.append([[x1, y1, z0], [x2, y2, z1], [x1, y1, z1]])
+
+    # Hole cylinder walls (inner surfaces)
+    hole_segs = 32
+    for hx, hy, hr in holes:
+        h_angles = [2 * math.pi * i / hole_segs for i in range(hole_segs)]
+        for i in range(hole_segs):
+            a1 = h_angles[i]
+            a2 = h_angles[(i + 1) % hole_segs]
+            hx1 = cx + hx + hr * math.cos(a1)
+            hy1 = cy + hy + hr * math.sin(a1)
+            hx2 = cx + hx + hr * math.cos(a2)
+            hy2 = cy + hy + hr * math.sin(a2)
+            # Inner wall (normals point toward hole center)
+            triangles.append([[hx1, hy1, z0], [hx2, hy2, z1], [hx2, hy2, z0]])
+            triangles.append([[hx1, hy1, z0], [hx1, hy1, z1], [hx2, hy2, z1]])
+
+    return np.array(triangles, dtype=np.float64)
+
+
+def box_with_holes_mesh(sx, sy, sz, holes, origin=(0, 0, 0), grid_res=1.0):
+    """Create a solid box with cylindrical through-holes (Z-axis).
+
+    Uses a rectangular grid and centroid-based hole exclusion to produce
+    proper geometry with real through-holes — no CSG subtraction needed.
+
+    Args:
+        sx, sy, sz: box dimensions (X width, Y depth, Z height)
+        holes: list of (hx, hy, hr) — hole center x/y relative to origin, hole radius
+        origin: (x0, y0, z0) corner at min x,y,z
+        grid_res: approximate grid cell size in mm (smaller = finer mesh)
+    Returns:
+        triangle array (n, 3, 3)
+    """
+    x0, y0, z0 = origin
+    z1 = z0 + sz
+    triangles = []
+
+    # Grid divisions
+    nx = max(2, int(math.ceil(sx / grid_res)))
+    ny = max(2, int(math.ceil(sy / grid_res)))
+    dx = sx / nx
+    dy = sy / ny
+
+    def point_in_hole(px, py):
+        for hx, hy, hr in holes:
+            ex, ey = px - (x0 + hx), py - (y0 + hy)
+            if ex * ex + ey * ey < hr * hr:
+                return True
+        return False
+
+    # Top and bottom faces — grid cells, skip those inside holes
+    for ix in range(nx):
+        for iy in range(ny):
+            gx0 = x0 + ix * dx
+            gx1 = x0 + (ix + 1) * dx
+            gy0 = y0 + iy * dy
+            gy1 = y0 + (iy + 1) * dy
+            # Centroid test
+            cx = (gx0 + gx1) / 2
+            cy = (gy0 + gy1) / 2
+            if point_in_hole(cx, cy):
+                continue
+            # Bottom face (-Z normal)
+            triangles.append([[gx0, gy0, z0], [gx1, gy1, z0], [gx1, gy0, z0]])
+            triangles.append([[gx0, gy0, z0], [gx0, gy1, z0], [gx1, gy1, z0]])
+            # Top face (+Z normal)
+            triangles.append([[gx0, gy0, z1], [gx1, gy0, z1], [gx1, gy1, z1]])
+            triangles.append([[gx0, gy0, z1], [gx1, gy1, z1], [gx0, gy1, z1]])
+
+    # Four side walls (full rectangles — holes don't intersect edges)
+    # Front wall (-Y)
+    triangles.append([[x0, y0, z0], [x0 + sx, y0, z0], [x0 + sx, y0, z1]])
+    triangles.append([[x0, y0, z0], [x0 + sx, y0, z1], [x0, y0, z1]])
+    # Back wall (+Y)
+    triangles.append([[x0, y0 + sy, z0], [x0 + sx, y0 + sy, z1], [x0 + sx, y0 + sy, z0]])
+    triangles.append([[x0, y0 + sy, z0], [x0, y0 + sy, z1], [x0 + sx, y0 + sy, z1]])
+    # Left wall (-X)
+    triangles.append([[x0, y0, z0], [x0, y0, z1], [x0, y0 + sy, z1]])
+    triangles.append([[x0, y0, z0], [x0, y0 + sy, z1], [x0, y0 + sy, z0]])
+    # Right wall (+X)
+    triangles.append([[x0 + sx, y0, z0], [x0 + sx, y0 + sy, z0], [x0 + sx, y0 + sy, z1]])
+    triangles.append([[x0 + sx, y0, z0], [x0 + sx, y0 + sy, z1], [x0 + sx, y0, z1]])
+
+    # Hole cylinder walls (inner surfaces)
+    hole_segs = 32
+    for hx, hy, hr in holes:
+        h_cx = x0 + hx
+        h_cy = y0 + hy
+        h_angles = [2 * math.pi * i / hole_segs for i in range(hole_segs)]
+        for i in range(hole_segs):
+            a1 = h_angles[i]
+            a2 = h_angles[(i + 1) % hole_segs]
+            px1 = h_cx + hr * math.cos(a1)
+            py1 = h_cy + hr * math.sin(a1)
+            px2 = h_cx + hr * math.cos(a2)
+            py2 = h_cy + hr * math.sin(a2)
+            # Inner wall (normals point toward hole center)
+            triangles.append([[px1, py1, z0], [px2, py2, z1], [px2, py2, z0]])
+            triangles.append([[px1, py1, z0], [px1, py1, z1], [px2, py2, z1]])
+
+    return np.array(triangles, dtype=np.float64)
+
+
+def hemisphere_mesh(radius, segments=SEGMENTS, lat_segments=16,
+                    center_xy=(0, 0), z_base=0):
+    """Create a solid hemisphere (dome pointing up from z_base).
+
+    Flat circular base at z_base, dome extends up to z_base + radius.
+    Includes the flat bottom cap.
+
+    Returns triangle array (n, 3, 3).
+    """
+    cx, cy = center_xy
+    triangles = []
+    angles = [2 * math.pi * i / segments for i in range(segments)]
+
+    # Flat bottom disk (circular base face, normal -Z)
+    for i in range(segments):
+        a1 = angles[i]
+        a2 = angles[(i + 1) % segments]
+        x1 = cx + radius * math.cos(a1)
+        y1 = cy + radius * math.sin(a1)
+        x2 = cx + radius * math.cos(a2)
+        y2 = cy + radius * math.sin(a2)
+        triangles.append([[cx, cy, z_base], [x2, y2, z_base], [x1, y1, z_base]])
+
+    # Hemisphere surface (latitude rings from equator to pole)
+    for i in range(lat_segments):
+        theta1 = (math.pi / 2) * i / lat_segments
+        theta2 = (math.pi / 2) * (i + 1) / lat_segments
+
+        r1 = radius * math.cos(theta1)
+        r2 = radius * math.cos(theta2)
+        z1 = z_base + radius * math.sin(theta1)
+        z2 = z_base + radius * math.sin(theta2)
+
+        for j in range(segments):
+            a1 = angles[j]
+            a2 = angles[(j + 1) % segments]
+            ca1, sa1 = math.cos(a1), math.sin(a1)
+            ca2, sa2 = math.cos(a2), math.sin(a2)
+
+            if r2 < 0.01:
+                # Near pole: single triangle to pole point
+                p1 = [cx + r1 * ca1, cy + r1 * sa1, z1]
+                p2 = [cx + r1 * ca2, cy + r1 * sa2, z1]
+                pole = [cx, cy, z_base + radius]
+                triangles.append([p1, p2, pole])
+            else:
+                # Quad strip between two latitude rings
+                p1 = [cx + r1 * ca1, cy + r1 * sa1, z1]
+                p2 = [cx + r1 * ca2, cy + r1 * sa2, z1]
+                p3 = [cx + r2 * ca2, cy + r2 * sa2, z2]
+                p4 = [cx + r2 * ca1, cy + r2 * sa1, z2]
+                triangles.append([p1, p2, p3])
+                triangles.append([p1, p3, p4])
 
     return np.array(triangles, dtype=np.float64)
 
@@ -589,176 +855,48 @@ def generate_motor_mount():
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def generate_ball_caster():
-    """Generate ball caster assembly STL.
+    """Generate caster skid / drag tip STL.
 
-    Hemispherical cup on a stem with mounting flange.
-    The assembly hangs below the chassis plate.
-    Orientation: flange at top (Z+), cup/ball at bottom (Z-).
-    We'll build it flange-at-Z=0, extending downward into -Z, then flip.
-    Actually, let's build it for printing: flange on the print bed (Z=0),
-    stem goes up, cup at top (upside down for printing).
+    Fixed hemisphere dome on a cylindrical stem with bolt-on flange.
+    No moving parts — the dome slides on the ground surface.
+    One solid piece, prints without supports.
+
+    Replaces the original ball caster design with a simpler, more
+    printable drag tip suitable for a lightweight robot on smooth floors.
     """
-    print("Generating ball_caster.stl ...")
+    print("Generating caster_skid.stl ...")
 
     parts = []
 
-    flange_r = CASTER_FLANGE_DIA / 2
-    flange_t = CASTER_FLANGE_THICK
-    cup_or = CASTER_CUP_ID / 2 + CASTER_CUP_WALL
-    cup_ir = CASTER_CUP_ID / 2
-    stem_r = cup_or + 1  # stem slightly wider than cup outer
-    stem_h = CASTER_STEM_HEIGHT
-    cup_depth = CASTER_CUP_DEPTH
+    dome_r = SKID_DOME_RADIUS               # 8mm
+    stem_r = SKID_STEM_DIA / 2               # 8mm
+    stem_h = SKID_STEM_HEIGHT                # 18.5mm
+    flange_r = SKID_FLANGE_DIA / 2           # 17.5mm
+    flange_t = SKID_FLANGE_THICK             # 3mm
+    bolt_r = SKID_MOUNT_BOLT_RADIUS          # 12mm
+    hole_r = SKID_MOUNT_HOLE_DIA / 2         # 1.7mm
 
-    # Build from bottom (print bed) up:
-    # Layer 1: Flange disk (Z=0 to Z=flange_t)
-    parts.append(cylinder_mesh(flange_r, flange_t, center_xy=(0, 0), z_base=0))
-
-    # Layer 2: Stem cylinder (Z=flange_t to Z=flange_t+stem_h)
-    parts.append(cylinder_mesh(stem_r, stem_h, center_xy=(0, 0),
-                               z_base=flange_t))
-
-    # Layer 3: Cup (hemispherical bowl, opening faces up = +Z for printing)
-    # We'll build it as a series of rings approximating a hemisphere
-    cup_z_base = flange_t + stem_h
-
-    # Build cup as stacked rings (cone frustum approximation of hemisphere)
-    n_rings = 24
-    cup_tris = []
-
-    for i in range(n_rings):
-        # Parametric angle from pole (bottom of cup) to rim
-        # theta1 at bottom (small radius), theta2 at top (larger radius)
-        t1 = (math.pi / 2) * i / n_rings
-        t2 = (math.pi / 2) * (i + 1) / n_rings
-
-        # Inner surface radii at these angles
-        ir1 = cup_ir * math.sin(t1)
-        ir2 = cup_ir * math.sin(t2)
-        # Outer surface radii
-        or1 = (cup_ir + CASTER_CUP_WALL) * math.sin(t1) if ir1 > 0 else CASTER_CUP_WALL
-        or2 = (cup_ir + CASTER_CUP_WALL) * math.sin(t2)
-
-        # Z positions (height above cup_z_base)
-        # At the pole (bottom of internal hemisphere), z = 0
-        # At the rim, z = cup_depth
-        # z = cup_ir * (1 - cos(theta))
-        iz1 = cup_ir * (1 - math.cos(t1))
-        iz2 = cup_ir * (1 - math.cos(t2))
-        oz1 = (cup_ir + CASTER_CUP_WALL) * (1 - math.cos(t1))
-        oz2 = (cup_ir + CASTER_CUP_WALL) * (1 - math.cos(t2))
-
-        z1_inner = cup_z_base + iz1
-        z2_inner = cup_z_base + iz2
-        z1_outer = cup_z_base + oz1
-        z2_outer = cup_z_base + oz2
-
-        angles = [2 * math.pi * j / SEGMENTS for j in range(SEGMENTS)]
-
-        for j in range(SEGMENTS):
-            a1 = angles[j]
-            a2 = angles[(j + 1) % SEGMENTS]
-            ca1, sa1 = math.cos(a1), math.sin(a1)
-            ca2, sa2 = math.cos(a2), math.sin(a2)
-
-            if i == 0:
-                # Bottom pole: triangle from center point to first ring
-                # Inner surface
-                center_inner = [0, 0, cup_z_base]
-                p1_inner = [ir2 * ca1, ir2 * sa1, z2_inner]
-                p2_inner = [ir2 * ca2, ir2 * sa2, z2_inner]
-                cup_tris.append([center_inner, p2_inner, p1_inner])
-
-                # Outer surface
-                center_outer = [0, 0, cup_z_base]
-                p1_outer = [or2 * ca1, or2 * sa1, z2_outer]
-                p2_outer = [or2 * ca2, or2 * sa2, z2_outer]
-                cup_tris.append([center_outer, p1_outer, p2_outer])
-
-                # The very bottom is solid (no hole), so connect inner to outer
-                # at the bottom
-            else:
-                # Inner surface quad
-                pi1 = [ir1 * ca1, ir1 * sa1, z1_inner]
-                pi2 = [ir1 * ca2, ir1 * sa2, z1_inner]
-                pi3 = [ir2 * ca1, ir2 * sa1, z2_inner]
-                pi4 = [ir2 * ca2, ir2 * sa2, z2_inner]
-                cup_tris.append([pi1, pi4, pi3])
-                cup_tris.append([pi1, pi2, pi4])
-
-                # Outer surface quad
-                po1 = [or1 * ca1, or1 * sa1, z1_outer]
-                po2 = [or1 * ca2, or1 * sa2, z1_outer]
-                po3 = [or2 * ca1, or2 * sa1, z2_outer]
-                po4 = [or2 * ca2, or2 * sa2, z2_outer]
-                cup_tris.append([po1, po3, po4])
-                cup_tris.append([po1, po4, po2])
-
-            # Rim (top ring) - connect inner to outer
-            if i == n_rings - 1:
-                pi_rim1 = [ir2 * ca1, ir2 * sa1, z2_inner]
-                pi_rim2 = [ir2 * ca2, ir2 * sa2, z2_inner]
-                po_rim1 = [or2 * ca1, or2 * sa1, z2_outer]
-                po_rim2 = [or2 * ca2, or2 * sa2, z2_outer]
-                cup_tris.append([pi_rim1, po_rim1, po_rim2])
-                cup_tris.append([pi_rim1, po_rim2, pi_rim2])
-
-    if cup_tris:
-        parts.append(np.array(cup_tris, dtype=np.float64))
-
-    # Connect stem top to cup outer bottom
-    # The stem top is at z = flange_t + stem_h, radius = stem_r
-    # The cup outer bottom is at z = cup_z_base, radius ~= CASTER_CUP_WALL (small)
-    # We need a transition ring / disk to connect them
-    # Simplest: solid disk at cup_z_base from stem_r down to cup outer bottom radius
-    # Actually, the stem already meets the cup base. Let's add a flat ring connecting
-    # stem outer wall to cup outer wall at the cup base height.
-
-    # Flat ring at cup_z_base connecting stem_r to cup bottom outer radius
-    # At theta=0, outer radius of cup = CASTER_CUP_WALL (approximately)
-    cup_bottom_or = CASTER_CUP_WALL
-    if stem_r > cup_bottom_or:
-        ring_tris = []
-        angles = [2 * math.pi * j / SEGMENTS for j in range(SEGMENTS)]
-        z = cup_z_base
-        for j in range(SEGMENTS):
-            a1 = angles[j]
-            a2 = angles[(j + 1) % SEGMENTS]
-            # Outer ring (stem)
-            ox1 = stem_r * math.cos(a1)
-            oy1 = stem_r * math.sin(a1)
-            ox2 = stem_r * math.cos(a2)
-            oy2 = stem_r * math.sin(a2)
-            # Inner ring (cup bottom)
-            ix1 = cup_bottom_or * math.cos(a1)
-            iy1 = cup_bottom_or * math.sin(a1)
-            ix2 = cup_bottom_or * math.cos(a2)
-            iy2 = cup_bottom_or * math.sin(a2)
-
-            ring_tris.append([[ox1, oy1, z], [ix1, iy1, z], [ix2, iy2, z]])
-            ring_tris.append([[ox1, oy1, z], [ix2, iy2, z], [ox2, oy2, z]])
-        parts.append(np.array(ring_tris, dtype=np.float64))
-
-    # Add snap-in slot: a rectangular notch in the cup rim
-    # This is just a visual feature; the cup rim already has an opening
-    # For printing, the slot helps inserting the ball
-
-    # Mounting holes in flange: 3x M3 holes in triangle pattern
-    # Triangle with 20mm side length, centered on origin
-    # We'll approximate holes as small cylinders that are visually present
-    # For actual printing, the slicer handles the through-holes
-    hole_r = CASTER_MOUNT_HOLE_DIA / 2
-    mount_r = CASTER_MOUNT_HOLE_SPACING / math.sqrt(3)  # circumradius of equilateral triangle
+    # Bolt hole positions (3x M3, 120° apart, starting at 90°)
+    bolt_holes = []
     for k in range(3):
-        angle = 2 * math.pi * k / 3 + math.pi / 6  # rotate 30 deg for alignment
-        hx = mount_r * math.cos(angle)
-        hy = mount_r * math.sin(angle)
-        # Hole as a tube through the flange
-        parts.append(tube_mesh(hole_r + 0.4, hole_r, flange_t,
-                               segments=24, center_xy=(hx, hy), z_base=0))
+        angle = 2 * math.pi * k / 3 + math.pi / 2
+        bolt_holes.append((bolt_r * math.cos(angle),
+                           bolt_r * math.sin(angle),
+                           hole_r))
+
+    # Layer 1: Flange with real through-holes (z=0 to z=flange_t)
+    parts.append(disk_with_holes_mesh(flange_r, flange_t, bolt_holes,
+                                      segments=96, rings=6, z_base=0))
+
+    # Layer 2: Cylindrical stem (z=flange_t to z=flange_t+stem_h)
+    parts.append(cylinder_mesh(stem_r, stem_h, z_base=flange_t))
+
+    # Layer 3: Hemisphere dome (z=flange_t+stem_h, dome extends upward)
+    parts.append(hemisphere_mesh(dome_r, segments=SEGMENTS, lat_segments=16,
+                                 z_base=flange_t + stem_h))
 
     m = make_mesh_from_triangles(parts)
-    path = os.path.join(OUTPUT_DIR, "ball_caster.stl")
+    path = os.path.join(OUTPUT_DIR, "caster_skid.stl")
     m.save(path)
     print(f"  Saved: {path} ({os.path.getsize(path)} bytes)")
     return path
@@ -809,232 +947,64 @@ def generate_standoff():
 def generate_sensor_bracket():
     """Generate HC-SR04 sensor bracket STL.
 
-    L-shaped bracket with angled vertical face for the sensor board.
-    Horizontal base mounts to chassis, vertical face holds HC-SR04.
-    The vertical face is angled 15 degrees outward.
+    Vertical L-bracket with horizontal channel rails.
+    Base plate bolts to top deck (2x M3 through-holes).
+    Back wall rises vertically from front edge of base.
+    Two horizontal rails on the front of the wall grip the HC-SR04 PCB.
+    Sensor slides in from the side between the rails.
+
+    Cross-section (looking from the side):
+         +--+  <- top rail
+         |  |  <- HC-SR04 board in channel (20.5mm gap)
+         +--+  <- bottom rail
+         |  |  <- 5mm header clearance
+         |  |  <- back wall
+    =====+  +===  <- base plate with bolt holes
+      DECK SURFACE
     """
     print("Generating sensor_bracket.stl ...")
 
     parts = []
 
-    w = SENSOR_BRACKET_W + 2 * SENSOR_WALL_THICK  # total width (X)
-    base_d = SENSOR_BASE_DEPTH                      # base depth (Y)
-    base_t = SENSOR_WALL_THICK                       # base thickness (Z)
-    wall_t = SENSOR_WALL_THICK                       # vertical wall thickness
-    wall_h = SENSOR_BRACKET_H + 2 * SENSOR_WALL_THICK  # total vertical face height
-    angle = math.radians(SENSOR_ANGLE_DEG)
+    length = BRACKET_LENGTH       # 50mm (X dimension)
+    base_w = BRACKET_BASE_W       # 18mm (Y dimension, base depth)
+    base_t = BRACKET_BASE_T       # 3mm  (Z, base thickness)
+    wall_t = BRACKET_WALL_T       # 2.5mm (Y, wall thickness)
+    wall_h = BRACKET_WALL_H       # 30mm (Z, wall height)
+    rail_d = BRACKET_RAIL_DEPTH   # 3mm  (Y, rail protrusion)
+    rail_h = BRACKET_RAIL_H       # 2mm  (Z, rail thickness)
+    bot_rail_z = BRACKET_BOT_RAIL_Z  # 8mm from base bottom
+    top_rail_z = bot_rail_z + rail_h + BRACKET_BOARD_GAP  # 28.5mm
+    hole_span = BRACKET_HOLE_SPAN # 35mm between bolt holes
+    hole_r = M3_CLEARANCE / 2     # 1.6mm
 
-    # Coordinate system: X = bracket width, Y = depth (front-to-back), Z = height
+    # Coordinate system: X = bracket length, Y = depth (wall at Y=0), Z = height
+    # Base sits on deck, wall rises from front edge (Y=0)
 
-    # Horizontal base plate
-    parts.append(box_mesh(w, base_d, base_t, origin=(0, 0, 0)))
-
-    # Angled vertical face
-    # The face rises from the front edge of the base (Y=0) and tilts outward
-    # The tilt is about the X-axis: top of wall leans toward +Y by angle degrees
-    # We'll create this as a tilted slab
-
-    # Bottom edge of vertical wall is at Y=0, Z=base_t
-    # Top edge is at Y = wall_h * sin(angle), Z = base_t + wall_h * cos(angle)
-    dy = wall_h * math.sin(angle)
-    dz = wall_h * math.cos(angle)
-
-    # Front face of wall (4 corners)
-    v_bl = [0, 0, base_t]                    # bottom-left
-    v_br = [w, 0, base_t]                    # bottom-right
-    v_tl = [0, dy, base_t + dz]             # top-left
-    v_tr = [w, dy, base_t + dz]             # top-right
-
-    # Back face of wall (offset by wall_t in the wall-normal direction)
-    # Normal to the wall face points roughly in +Y (tilted)
-    nx = 0
-    ny = math.cos(angle)
-    nz = math.sin(angle)
-    # Wait, the wall tilts so its normal rotates. Let me think again.
-    # The wall face lies in the X-Z' plane where Z' is the tilted axis.
-    # The wall thickness is along the normal to this face.
-    # Normal to the tilted face: (0, -sin(angle), cos(angle)) rotated...
-    # Actually, the wall surface normal points backward (+Y direction mostly).
-    # The back face vertices are offset by wall_t in the Y direction (perpendicular to wall face)
-
-    # The wall is a slab. Its "thickness" direction is perpendicular to its face.
-    # Face normal = (0, cos(angle), -sin(angle)) -- this is approximate but let's
-    # offset the back face simply in Y by wall_t (close enough for small angles)
-
-    # More precisely: offset along (0, cos(angle), sin(angle)) * wall_t
-    # No -- the face plane normal: the face contains vectors (1,0,0) and (0, sin(angle), cos(angle))
-    # Cross product: (0,0,0)... let me use actual vertices.
-    # Face direction: from bottom to top = (0, dy, dz) normalized = (0, sin(angle), cos(angle))
-    # Width direction: (1, 0, 0)
-    # Normal = width x up = (1,0,0) x (0, sin(angle), cos(angle)) = (0*cos-0*sin, 0*0-1*cos, 1*sin-0*0)
-    # = (0, -cos(angle), sin(angle))
-    # So normal points in (0, -cos(angle), sin(angle)). For the back face we go opposite:
-    # (0, cos(angle), -sin(angle))
-
-    dn_y = wall_t * math.cos(angle)
-    dn_z = -wall_t * math.sin(angle)
-
-    vb_bl = [0, 0 + dn_y, base_t + dn_z]
-    vb_br = [w, 0 + dn_y, base_t + dn_z]
-    vb_tl = [0, dy + dn_y, base_t + dz + dn_z]
-    vb_tr = [w, dy + dn_y, base_t + dz + dn_z]
-
-    # Front face (2 triangles)
-    parts.append(np.array([
-        [v_bl, v_br, v_tr],
-        [v_bl, v_tr, v_tl],
-    ], dtype=np.float64))
-
-    # Back face (2 triangles, reversed winding)
-    parts.append(np.array([
-        [vb_bl, vb_tr, vb_br],
-        [vb_bl, vb_tl, vb_tr],
-    ], dtype=np.float64))
-
-    # Top edge (2 triangles)
-    parts.append(np.array([
-        [v_tl, v_tr, vb_tr],
-        [v_tl, vb_tr, vb_tl],
-    ], dtype=np.float64))
-
-    # Bottom edge (2 triangles)
-    parts.append(np.array([
-        [v_bl, vb_br, v_br],
-        [v_bl, vb_bl, vb_br],
-    ], dtype=np.float64))
-
-    # Left edge (2 triangles)
-    parts.append(np.array([
-        [v_bl, v_tl, vb_tl],
-        [v_bl, vb_tl, vb_bl],
-    ], dtype=np.float64))
-
-    # Right edge (2 triangles)
-    parts.append(np.array([
-        [v_br, vb_br, vb_tr],
-        [v_br, vb_tr, v_tr],
-    ], dtype=np.float64))
-
-    # Transducer holes in the vertical face
-    # HC-SR04 has 2 cylinders, 16mm diameter, 26mm center-to-center
-    # Positioned centered on the face
-    # The holes go through the wall thickness
-    # We'll represent them as tubes embedded in the angled wall
-
-    face_center_x = w / 2
-    face_center_z_local = (SENSOR_BRACKET_H + 2 * SENSOR_WALL_THICK) / 2
-
-    for sign in [-1, 1]:
-        # Transducer center offset from face center (in X direction)
-        tx_offset = sign * SENSOR_TRANSDUCER_SPAN / 2
-        tx = face_center_x + tx_offset
-        # Height on the face
-        tz_local = face_center_z_local  # centered vertically on face
-
-        # Convert local face coordinates to 3D
-        # On the face: X is the X-axis, "up" on face is (0, sin(angle), cos(angle))
-        # Position = base_point + tz_local * (0, sin(angle), cos(angle))
-        ty_3d = tz_local * math.sin(angle)
-        tz_3d = base_t + tz_local * math.cos(angle)
-
-        # Create a cylinder aligned with the face normal
-        # Normal direction: (0, -cos(angle), sin(angle))
-        # We'll create a cylinder from front face to back face
-        tr = SENSOR_TRANSDUCER_DIA / 2
-        n_segs = 36
-        hole_tris = []
-
-        for j in range(n_segs):
-            a1 = 2 * math.pi * j / n_segs
-            a2 = 2 * math.pi * ((j + 1) % n_segs) / n_segs
-
-            # Circle in the plane perpendicular to face normal
-            # Two basis vectors in that plane: (1, 0, 0) and (0, sin(angle), cos(angle))
-            # Point on circle = center + r*cos(a)*e1 + r*sin(a)*e2
-            for ai in [a1, a2]:
-                pass  # placeholder
-
-            # Front circle point
-            def circ_pt(a, face_offset=0):
-                ex = tr * math.cos(a)
-                ey = tr * math.sin(a) * math.sin(angle)
-                ez = tr * math.sin(a) * math.cos(angle)
-                # Offset along face normal
-                ny_off = face_offset * (-math.cos(angle))
-                nz_off = face_offset * math.sin(angle)
-                return [tx + ex, ty_3d + ey + ny_off, tz_3d + ez + nz_off]
-
-            p1f = circ_pt(a1, 0)
-            p2f = circ_pt(a2, 0)
-            p1b = circ_pt(a1, wall_t)
-            p2b = circ_pt(a2, wall_t)
-
-            # Cylinder wall (inside of hole)
-            hole_tris.append([p1f, p2f, p2b])
-            hole_tris.append([p1f, p2b, p1b])
-
-        parts.append(np.array(hole_tris, dtype=np.float64))
-
-    # Support rib connecting base to vertical wall (triangular gusset on each side)
-    rib_t = SENSOR_WALL_THICK
-    rib_h = min(15, dz)  # 15mm tall or wall height, whichever is less
-    rib_d = min(12, base_d)  # 12mm deep
-
-    # Left rib
-    rib_pts_left = [
-        [0, 0, base_t],                # bottom-front
-        [0, rib_d, base_t],            # bottom-back
-        [0, rib_d * math.sin(angle), base_t + rib_h],  # top (on wall surface)
+    # ── Base plate with 2x M3 through-holes ──
+    # Holes centered on base: X = length/2 ± hole_span/2, Y = base_w/2
+    holes = [
+        (length / 2 - hole_span / 2, base_w / 2, hole_r),
+        (length / 2 + hole_span / 2, base_w / 2, hole_r),
     ]
-    rib_pts_left_r = [
-        [rib_t, 0, base_t],
-        [rib_t, rib_d, base_t],
-        [rib_t, rib_d * math.sin(angle), base_t + rib_h],
-    ]
+    parts.append(box_with_holes_mesh(length, base_w, base_t, holes,
+                                     origin=(0, 0, 0), grid_res=1.0))
 
-    # Triangle faces
-    parts.append(np.array([
-        rib_pts_left,
-        [rib_pts_left_r[0], rib_pts_left_r[2], rib_pts_left_r[1]],
-        # Connecting quads
-        [rib_pts_left[0], rib_pts_left_r[0], rib_pts_left_r[1]],
-        [rib_pts_left[0], rib_pts_left_r[1], rib_pts_left[1]],
-        [rib_pts_left[1], rib_pts_left_r[1], rib_pts_left_r[2]],
-        [rib_pts_left[1], rib_pts_left_r[2], rib_pts_left[2]],
-        [rib_pts_left[0], rib_pts_left[2], rib_pts_left_r[2]],
-        [rib_pts_left[0], rib_pts_left_r[2], rib_pts_left_r[0]],
-    ], dtype=np.float64))
+    # ── Back wall (rises from front edge of base) ──
+    # Y: from 0 to wall_t, Z: from base_t to base_t + wall_h
+    parts.append(box_mesh(length, wall_t, wall_h,
+                          origin=(0, 0, base_t)))
 
-    # Right rib
-    rx = w - rib_t
-    rib_pts_right = [
-        [rx, 0, base_t],
-        [rx, rib_d, base_t],
-        [rx, rib_d * math.sin(angle), base_t + rib_h],
-    ]
-    rib_pts_right_r = [
-        [w, 0, base_t],
-        [w, rib_d, base_t],
-        [w, rib_d * math.sin(angle), base_t + rib_h],
-    ]
-    parts.append(np.array([
-        [rib_pts_right[0], rib_pts_right[2], rib_pts_right[1]],
-        rib_pts_right_r,
-        [rib_pts_right[0], rib_pts_right_r[1], rib_pts_right_r[0]],
-        [rib_pts_right[0], rib_pts_right[1], rib_pts_right_r[1]],
-        [rib_pts_right[1], rib_pts_right_r[2], rib_pts_right_r[1]],
-        [rib_pts_right[1], rib_pts_right[2], rib_pts_right_r[2]],
-        [rib_pts_right[0], rib_pts_right_r[2], rib_pts_right[2]],
-        [rib_pts_right[0], rib_pts_right_r[0], rib_pts_right_r[2]],
-    ], dtype=np.float64))
+    # ── Bottom rail (horizontal shelf on front of wall) ──
+    # Y: from -rail_d to 0 (protrudes forward from wall face)
+    # Z: from bot_rail_z to bot_rail_z + rail_h
+    parts.append(box_mesh(length, rail_d, rail_h,
+                          origin=(0, -rail_d, bot_rail_z)))
 
-    # Mounting holes in base
-    # Two M3 holes spaced SENSOR_BASE_HOLE_SPAN apart, centered on base
-    for sign in [-1, 1]:
-        hx = w / 2 + sign * SENSOR_BASE_HOLE_SPAN / 2
-        hy = base_d / 2
-        parts.append(tube_mesh(M3_CLEARANCE / 2 + 0.4, M3_CLEARANCE / 2, base_t,
-                               segments=24, center_xy=(hx, hy), z_base=0))
+    # ── Top rail ──
+    # Z: from top_rail_z to top_rail_z + rail_h
+    parts.append(box_mesh(length, rail_d, rail_h,
+                          origin=(0, -rail_d, top_rail_z)))
 
     m = make_mesh_from_triangles(parts)
     path = os.path.join(OUTPUT_DIR, "sensor_bracket.stl")
@@ -1204,65 +1174,12 @@ motor_mount();
         f.write(scad)
     print(f"  Saved: {path}")
 
-    # Ball caster
-    scad = f"""// EvoBot reference-01 — Ball Caster Assembly (print 1x)
-// Open in OpenSCAD → Render (F6) → Export STL (F7)
-
-// Parametric dimensions (mm)
-ball_dia          = {CASTER_BALL_DIA};
-cup_id            = {CASTER_CUP_ID};
-cup_depth         = {CASTER_CUP_DEPTH};
-cup_wall          = {CASTER_CUP_WALL};
-flange_dia        = {CASTER_FLANGE_DIA};
-flange_thick      = {CASTER_FLANGE_THICK};
-stem_height       = {CASTER_STEM_HEIGHT};
-mount_hole_spacing = {CASTER_MOUNT_HOLE_SPACING};
-mount_hole_dia    = {CASTER_MOUNT_HOLE_DIA};
-snap_slot_w       = {CASTER_SNAP_SLOT_WIDTH};
-
-$fn = {SEGMENTS};
-
-module ball_caster() {{
-    cup_od = cup_id + 2*cup_wall;
-    stem_r = cup_od/2 + 1;
-
-    difference() {{
-        union() {{
-            // Flange
-            cylinder(d=flange_dia, h=flange_thick);
-            // Stem
-            translate([0, 0, flange_thick])
-                cylinder(r=stem_r, h=stem_height);
-            // Cup (solid sphere shell)
-            translate([0, 0, flange_thick + stem_height])
-                difference() {{
-                    sphere(d=cup_od);
-                    sphere(d=cup_id);
-                    // Cut off top half (keep bottom hemisphere = cup)
-                    translate([0, 0, cup_od/2])
-                        cube([cup_od+2, cup_od+2, cup_od], center=true);
-                    // Cut off below the equator to desired depth
-                    translate([0, 0, -(cup_od/2 + cup_depth)])
-                        cube([cup_od+2, cup_od+2, cup_od], center=true);
-                }}
-        }}
-        // Mounting holes (3x, equilateral triangle)
-        for (i = [0:2])
-            rotate([0, 0, i*120 + 30])
-                translate([mount_hole_spacing/sqrt(3), 0, -1])
-                    cylinder(d=mount_hole_dia, h=flange_thick + 2);
-        // Snap-in slot (rectangular notch in cup rim)
-        translate([-snap_slot_w/2, -cup_od/2-1, flange_thick + stem_height - cup_depth])
-            cube([snap_slot_w, cup_od+2, cup_depth + cup_wall + 1]);
-    }}
-}}
-
-ball_caster();
-"""
-    path = os.path.join(OUTPUT_DIR, "ball_caster.scad")
-    with open(path, 'w') as f:
-        f.write(scad)
-    print(f"  Saved: {path}")
+    # Caster skid — read the SCAD file we already maintain separately
+    scad_path = os.path.join(OUTPUT_DIR, "ball_caster.scad")
+    if os.path.exists(scad_path):
+        print(f"  Exists: {scad_path} (caster skid, maintained separately)")
+    else:
+        print(f"  Warning: {scad_path} not found — create from ball_caster.scad template")
 
     # Standoff
     scad = f"""// EvoBot reference-01 — Deck Standoff (print 4x)
@@ -1302,59 +1219,46 @@ standoff();
         f.write(scad)
     print(f"  Saved: {path}")
 
-    # Sensor bracket
+    # Sensor bracket (L-bracket with channel rails)
     scad = f"""// EvoBot reference-01 — HC-SR04 Sensor Bracket (print 2x)
+// L-bracket with channel rails for slide-in PCB retention
 // Open in OpenSCAD → Render (F6) → Export STL (F7)
 
 // Parametric dimensions (mm)
-board_w         = {SENSOR_BRACKET_W};       // HC-SR04 board width
-board_h         = {SENSOR_BRACKET_H};       // HC-SR04 board height
-base_depth      = {SENSOR_BASE_DEPTH};      // horizontal base depth
-wall_thick      = {SENSOR_WALL_THICK};      // wall/base thickness
-angle           = {SENSOR_ANGLE_DEG};       // outward tilt (degrees)
-transducer_dia  = {SENSOR_TRANSDUCER_DIA};  // ultrasonic cylinder diameter
-transducer_span = {SENSOR_TRANSDUCER_SPAN}; // center-to-center spacing
-base_hole_span  = {SENSOR_BASE_HOLE_SPAN};  // mounting hole spacing
-mount_hole_dia  = {M3_CLEARANCE};           // M3 clearance
+bracket_len    = {BRACKET_LENGTH};       // X dimension
+base_w         = {BRACKET_BASE_W};       // Y dimension (base depth)
+base_t         = {BRACKET_BASE_T};       // Z (base thickness)
+wall_t         = {BRACKET_WALL_T};       // Y (back wall thickness)
+wall_h         = {BRACKET_WALL_H};       // Z (wall height above base top)
+rail_d         = {BRACKET_RAIL_DEPTH};   // Y (rail protrusion)
+rail_h         = {BRACKET_RAIL_H};       // Z (rail thickness)
+bot_rail_z     = {BRACKET_BOT_RAIL_Z};   // Z offset for bottom rail
+board_gap      = {BRACKET_BOARD_GAP};    // gap between rails (HC-SR04 height)
+hole_span      = {BRACKET_HOLE_SPAN};    // M3 bolt hole spacing
+mount_hole_dia = {M3_CLEARANCE};         // M3 clearance
 
 $fn = {SEGMENTS};
 
 module sensor_bracket() {{
-    total_w = board_w + 2*wall_thick;
-    face_h  = board_h + 2*wall_thick;
+    top_rail_z = bot_rail_z + rail_h + board_gap;
 
     difference() {{
         union() {{
-            // Horizontal base
-            translate([-total_w/2, 0, 0])
-                cube([total_w, base_depth, wall_thick]);
-            // Angled vertical face
-            translate([0, 0, wall_thick])
-                rotate([angle, 0, 0])
-                    translate([-total_w/2, -wall_thick/2, 0])
-                        cube([total_w, wall_thick, face_h]);
-            // Gusset ribs (left and right)
-            for (sx = [-1, 1])
-                translate([sx * (total_w/2 - wall_thick), 0, wall_thick])
-                    linear_extrude(height = wall_thick)
-                        polygon([[0,0], [12,0], [0,12]]);
+            // Base plate
+            cube([bracket_len, base_w, base_t]);
+            // Back wall
+            cube([bracket_len, wall_t, base_t + wall_h]);
+            // Bottom rail
+            translate([0, -rail_d, bot_rail_z])
+                cube([bracket_len, rail_d, rail_h]);
+            // Top rail
+            translate([0, -rail_d, top_rail_z])
+                cube([bracket_len, rail_d, rail_h]);
         }}
-        // Transducer holes (2x cylinders through the angled face)
+        // M3 bolt holes through base
         for (sx = [-1, 1])
-            translate([sx * transducer_span/2, 0, wall_thick + face_h/2])
-                rotate([angle, 0, 0])
-                    rotate([90, 0, 0])
-                        translate([0, 0, -wall_thick - 1])
-                            cylinder(d=transducer_dia, h=wall_thick + 2);
-        // HC-SR04 board slot (recessed area for the PCB)
-        translate([0, 0, wall_thick + wall_thick])
-            rotate([angle, 0, 0])
-                translate([-board_w/2, -0.1, wall_thick])
-                    cube([board_w, 1.6, board_h]);  // 1.6mm PCB thickness
-        // Base mounting holes
-        for (sx = [-1, 1])
-            translate([sx * base_hole_span/2, base_depth/2, -1])
-                cylinder(d=mount_hole_dia, h=wall_thick + 2);
+            translate([bracket_len/2 + sx*hole_span/2, base_w/2, -1])
+                cylinder(d=mount_hole_dia, h=base_t + 2);
     }}
 }}
 

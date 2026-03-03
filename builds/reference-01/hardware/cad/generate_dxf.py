@@ -89,6 +89,11 @@ SENSOR_RIGHT_X    = 150   # Center X of right sensor
 SENSOR_Y          = 232   # Center Y (near front edge, 18mm from edge)
 SENSOR_ANGLE      = 15    # Outward angle in degrees
 
+# Sensor bracket bolt holes (top deck, behind each sensor cutout)
+BRACKET_HOLE_DIA  = 3.2    # M3
+BRACKET_HOLE_SPAN = 35     # mm between 2 holes per bracket
+BRACKET_Y         = SENSOR_Y - SENSOR_SLOT_H / 2 - 8  # 8mm behind sensor cutout rear edge
+
 # Webcam mount hole (top deck, front center)
 WEBCAM_HOLE_DIA   = 4.2   # M4
 WEBCAM_X          = 100
@@ -321,6 +326,12 @@ def draw_top_deck(msp, ox=0, oy=0):
                           SENSOR_SLOT_W, SENSOR_SLOT_H, SENSOR_ANGLE)
     add_rotated_rect_slot(msp, ox + SENSOR_RIGHT_X, oy + SENSOR_Y,
                           SENSOR_SLOT_W, SENSOR_SLOT_H, -SENSOR_ANGLE)
+
+    # Sensor bracket bolt holes (2 per bracket, 4 total)
+    for sensor_x in [SENSOR_LEFT_X, SENSOR_RIGHT_X]:
+        for sign in [-1, 1]:
+            hx = sensor_x + sign * BRACKET_HOLE_SPAN / 2
+            add_circle(msp, ox + hx, oy + BRACKET_Y, BRACKET_HOLE_DIA)
 
     # Wire pass-through slot (aligned with bottom)
     add_rect_slot(msp, ox + WIRE_SLOT_X, oy + WIRE_SLOT_Y, WIRE_SLOT_W, WIRE_SLOT_H)
